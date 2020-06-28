@@ -1,7 +1,4 @@
 <?php
-use Microsoft\Graph\Graph;
-use Microsoft\Graph\Model;
-
 require_once 'vendor/autoload.php';
 require_once 'utils.php';
 

@@ -49,6 +49,35 @@ function refreshMSToken($conn, $ms_id, $ms_refreshtoken){
     return $newAccessToken->getToken();
 }
 
+function refreshGoogleToken($conn, $ms_id, $google_refreshtoken){
+    $client = new Google_Client();
+    $client->setApplicationName("To Do and Google Calendar Syncer");
+    $client->setAuthConfig('./google_client_credentials.json');
+    $client->addScope(Google_Service_Calendar::CALENDAR);
+    $client->setAccessType('offline');
+    $client->setPrompt('consent');
+    $client->setIncludeGrantedScopes(true);
+
+    $client->setRedirectUri($_ENV['GOOGLE_OAUTH_REDIRECT_URI']);
+
+    $client->refreshToken($google_refreshtoken);
+    $gToken = $client->getAccessToken();
+
+    $uStmt = $conn->prepare('UPDATE tokens SET google_accesstoken=:g_at, google_accesstoken_expiry=:g_at_exp WHERE ms_id=:ms_id');
+
+    $uStmt->bindValue(':ms_id', $ms_id, PDO::PARAM_STR);
+    $uStmt->bindValue(':g_at', json_encode($gToken), PDO::PARAM_STR);
+    $uStmt->bindValue(':g_at_exp', $gToken['created'] + $gToken['expires_in'], PDO::PARAM_INT);
+
+    $uStmt->execute();
+
+    return $gToken;
+}
+
+function renewMSSub($ubID) {
+
+}
+
 function fetchMSUserToken($conn, $ms_id) {
     $stmt = $conn->prepare('SELECT ms_accesstoken,ms_accesstoken_expiry,ms_refreshtoken FROM tokens WHERE ms_id=? LIMIT 1');
     $stmt->bindParam(1, $ms_id, PDO::PARAM_STR);
@@ -57,7 +86,7 @@ function fetchMSUserToken($conn, $ms_id) {
     $row = $stmt->fetch(PDO::FETCH_ASSOC);
 
     if($row['ms_accesstoken'] != null){
-        if(time() > $row['ms_accesstoken_expiry']) {
+        if(time() > $row['ms_accesstoken_expiry'] - 60) { // give a bit of leeway so that the token will not expire as we are performing an operation
             // need to refresh the token
             echo 'refreshing token';
             return refreshMSToken($conn, $ms_id, $row['ms_refreshtoken']);
@@ -70,4 +99,61 @@ function fetchMSUserToken($conn, $ms_id) {
         return null;
     }
 
+}
+
+function fetchGoogleUserToken($conn, $ms_id){
+    $stmt = $conn->prepare('SELECT google_accesstoken,google_accesstoken_expiry,google_refreshtoken FROM tokens WHERE ms_id=? LIMIT 1');
+    $stmt->bindParam(1, $ms_id, PDO::PARAM_STR);
+    $stmt->execute();
+
+    $row = $stmt->fetch(PDO::FETCH_ASSOC);
+
+    if($row['google_accesstoken'] != null){
+        if(time() > $row['google_accesstoken_expiry'] - 60) { // give a bit of leeway so that the token will not expire as we are performing an operation
+            // need to refresh the token
+            echo 'refreshing token';
+            return refreshGoogleToken($conn, $ms_id, $row['google_refreshtoken']);
+        }
+        else {
+            return json_decode($row['google_accesstoken'], true);
+        }
+    }
+    else{
+        return null;
+    }
+}
+
+function prepareEventFromTodo($toDo){
+    // set event start and end to due date, otherwise the day it was created
+    $eventStartEnd = new Google_Service_Calendar_EventDateTime();
+    $startEndDate = date("Y-m-d");
+    echo $startEndDate;
+
+    if($toDo['DueDateTime'] != null){
+
+        try {
+            $startEndDateTime = new DateTime($toDo['DueDateTime']['DateTime']);
+            $startEndDate = $startEndDateTime->format('Y-m-d');
+            $eventStartEnd->setTimeZone($toDo['DueDateTime']['TimeZone']);
+        } catch (Exception $e) {
+            $eventStartEnd->setTimeZone(date_default_timezone_get());
+        }
+
+    }
+    else{
+        $eventStartEnd->setTimeZone(date_default_timezone_get());
+    }
+
+    $eventStartEnd->setDate($startEndDate);
+
+
+    $event = new Google_Service_Calendar_Event();
+    $event->setSummary($toDo['Subject']);
+    $event->setDescription($toDo['Body']['Content']);
+    
+    $event->setStart($eventStartEnd);
+    $event->setEnd($eventStartEnd);
+    
+    return $event;
+        
 }

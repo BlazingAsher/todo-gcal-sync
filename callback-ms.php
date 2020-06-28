@@ -1,7 +1,4 @@
 <?php
-use Microsoft\Graph\Graph;
-use Microsoft\Graph\Model;
-
 session_start();
 require_once 'vendor/autoload.php';
 require_once 'utils.php';
@@ -69,7 +66,7 @@ if (isset($authCode)) {
         $conn = fetchPDOConnection();
         if($conn != null){
             // Check if user already exists
-            $stmt = $conn->prepare('SELECT EXISTS(SELECT * FROM tokens WHERE ms_id=?) as ex');
+            $stmt = $conn->prepare('SELECT EXISTS(SELECT * FROM tokens WHERE ms_id=? LIMIT 1) as ex');
             $stmt->bindParam(1, $user_ms_id, PDO::PARAM_STR);
             $stmt->execute();
 
