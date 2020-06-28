@@ -23,7 +23,7 @@ if($data != null){
             $resource = $noti['Resource'];
 
             // fetch tokens from the DB
-            $stmt = $conn->prepare('SELECT ms_id,google_calendar_id FROM tokens WHERE id IN (SELECT user_id FROM ms_subs WHERE ms_sub_id=?)');
+            $stmt = $conn->prepare('SELECT ms_id,google_calendar_id FROM tokens WHERE ms_id IN (SELECT ms_id FROM ms_subs WHERE ms_sub_id=?)');
             $stmt->bindParam(1, $noti['SubscriptionId']);
 
             $stmt->execute();

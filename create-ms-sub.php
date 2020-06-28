@@ -9,7 +9,7 @@ $dotenv->load();
 if(isset($_SESSION['ms_id'])){
     $conn = fetchPDOConnection();
     if($conn != null){
-        $stmtCheckStatus = $conn->prepare('SELECT ms_sub_id FROM ms_subs WHERE user_id IN (SELECT id FROM tokens WHERE ms_id=?');
+        $stmtCheckStatus = $conn->prepare('SELECT ms_sub_id FROM ms_subs WHERE ms_id =? LIMIT 1');
         $stmtCheckStatus->bindParam(1, $_SESSION['ms_id'], PDO::PARAM_STR);
 
         $stmtCheckStatus->execute();
@@ -32,7 +32,15 @@ if(isset($_SESSION['ms_id'])){
                         "ClientState"=>"2"
                     ]
                 ]);
-                echo $res->getBody();
+
+                $newSubInfo = json_decode($res->getBody(), true);
+
+                $stmtAddSub = $conn->prepare('INSERT INTO ms_subs (ms_sub_id, ms_id) VALUES (:ms_s_i, :m_i)');
+                $stmtAddSub->bindValue(':ms_s_i', $newSubInfo['Id'], PDO::PARAM_STR);
+                $stmtAddSub->bindValue(':m_i', $_SESSION['ms_id'], PDO::PARAM_STR);
+
+                $stmtAddSub->execute();
+
                 echo '<br><br>Subscribed successfully';
             } catch (\GuzzleHttp\Exception\GuzzleException $e) {
                 echo 'Unable to subscribe to notifications. Try logging in again or check the log for details';

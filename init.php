@@ -6,7 +6,7 @@ if($conn != null){
     $stmt = $conn->prepare('CREATE TABLE IF NOT EXISTS `ms_subs` (
   `id` int(11) NOT NULL,
   `ms_sub_id` mediumtext NOT NULL,
-  `user_id` int(11) NOT NULL
+  `ms_id` mediumtext NOT NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;');
     $stmt->execute();
 
