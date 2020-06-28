@@ -95,6 +95,7 @@ if (isset($authCode)) {
             echo 'executed';
 
             $_SESSION["ms_id"] = $user_ms_id;
+            $_SESSION['ms_token'] = $accessToken->getToken();
 
             //TODO: Subscribe to event notifications
 
