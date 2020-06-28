@@ -1,17 +1,19 @@
 <?php
 session_start();
 require_once 'vendor/autoload.php';
-require_once 'config.php';
+
+$dotenv = Dotenv\Dotenv::createImmutable(__DIR__);
+$dotenv->load();
 
 // Initialize the OAuth client
 $oauthClient = new \League\OAuth2\Client\Provider\GenericProvider([
-    'clientId'                => $OAUTH_APP_ID,
-    'clientSecret'            => $OAUTH_APP_PASSWORD,
-    'redirectUri'             => $OAUTH_REDIRECT_URI,
-    'urlAuthorize'            => $OAUTH_AUTHORITY.$OAUTH_AUTHORIZE_ENDPOINT,
-    'urlAccessToken'          => $OAUTH_AUTHORITY.$OAUTH_TOKEN_ENDPOINT,
+    'clientId'                => $_ENV['OAUTH_APP_ID'],
+    'clientSecret'            => $_ENV['OAUTH_APP_PASSWORD'],
+    'redirectUri'             => $_ENV['OAUTH_REDIRECT_URI'],
+    'urlAuthorize'            => $_ENV['OAUTH_AUTHORITY'].$_ENV['OAUTH_AUTHORIZE_ENDPOINT'],
+    'urlAccessToken'          => $_ENV['OAUTH_AUTHORITY'].$_ENV['OAUTH_TOKEN_ENDPOINT'],
     'urlResourceOwnerDetails' => '',
-    'scopes'                  => $OAUTH_SCOPES
+    'scopes'                  => $_ENV['OAUTH_SCOPES']
 ]);
 
 $authUrl = $oauthClient->getAuthorizationUrl();

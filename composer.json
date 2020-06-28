@@ -1,7 +1,7 @@
 {
     "require": {
-        "microsoft/microsoft-graph": "^1.13",
         "league/oauth2-client": "^2.4",
-        "google/apiclient": "^2.0"
+        "google/apiclient": "^2.0",
+        "vlucas/phpdotenv": "^5.0"
     }
 }
