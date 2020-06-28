@@ -1,4 +1,4 @@
-#Microsoft To Do and Google Calendar Syncer
+# Microsoft To Do and Google Calendar Syncer
 (Not affiliated with Microsoft whatsoever)
 
 These PHP scripts allow you to sync Microsoft To Do with Google Calendar. Here are the steps to set stuff up.
