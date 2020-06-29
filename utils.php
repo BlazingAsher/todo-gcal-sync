@@ -1,5 +1,6 @@
 <?php
 require_once 'vendor/autoload.php';
+require_once 'ToDoCalSyncException.php';
 $dotenv = Dotenv\Dotenv::createImmutable(__DIR__);
 $dotenv->load();
 
@@ -116,28 +117,31 @@ function fetchGoogleUserToken($conn, $ms_id){
 }
 
 function prepareEventFromTodo($toDo){
+    $logger = new Katzgrau\KLogger\Logger(__DIR__.'/logs');
     // set event start and end to due date, otherwise the day it was created
     $eventStartEnd = new Google_Service_Calendar_EventDateTime();
-    $startEndDate = date("Y-m-d");
-    echo $startEndDate;
+    $startEndDateTime = new DateTime($toDo['CreatedDateTime']);
 
     if($toDo['DueDateTime'] != null){
-
         try {
             $startEndDateTime = new DateTime($toDo['DueDateTime']['DateTime']);
-            $startEndDate = $startEndDateTime->format('Y-m-d');
             $eventStartEnd->setTimeZone($toDo['DueDateTime']['TimeZone']);
         } catch (Exception $e) {
-            $eventStartEnd->setTimeZone(date_default_timezone_get());
+            // No need to do anything, we have default set already
         }
-
     }
     else{
-        $eventStartEnd->setTimeZone(date_default_timezone_get());
+        // Microsoft sends DateTimes as UTC, PHP is unable to get UTC from the Z at the end for some reason
+        $eventStartEnd->setTimeZone("UTC");
     }
 
-    $eventStartEnd->setDate($startEndDate);
+    $startEndDate = $startEndDateTime->format('Y-m-d');
 
+//    $logger->info($startEndDate);
+//    $logger->info($eventStartEnd->getTimeZone());
+//    $logger->debug(json_encode($toDo));
+
+    $eventStartEnd->setDate($startEndDate);
 
     $event = new Google_Service_Calendar_Event();
     $event->setSummary($toDo['Subject']);

@@ -11,6 +11,7 @@ if(isset($_GET['validationtoken'])){
 }
 
 if($data != null){
+    $logger->info('Received hook call.');
     try{
         $conn = fetchPDOConnection();
         foreach($data['value'] as $noti){
@@ -69,14 +70,14 @@ if($data != null){
                         // Client request error
                         $logger->error('There was an error fetching information about the task.');
                         $logger->error($e);
-                        $logger->debug($data);
+                        $logger->debug($json);
                         die();
                     }
                     catch(\GuzzleHttp\Exception\ServerException $e){
                         // Server side error
                         $logger->error('There was an external server error fetching information about the task.');
                         $logger->error($e);
-                        $logger->debug($data);
+                        $logger->debug($json);
                         die();
                     }
 
@@ -96,7 +97,7 @@ if($data != null){
                     catch(Google_Service_Exception $e){
                         $logger->error('There was an error updating the corresponding event from Google Calendar');
                         $logger->error($e);
-                        $logger->debug($data);
+                        $logger->debug($json);
                         $createEvent = true;
                     }
                 }
@@ -108,7 +109,7 @@ if($data != null){
                     catch(Google_Service_Exception $e){
                         $logger->error('There was an error removing the corresponding event from Google Calendar');
                         $logger->error($e);
-                        $logger->debug($data);
+                        $logger->debug($json);
                     }
 
                     // Drop it from the DB
@@ -119,6 +120,10 @@ if($data != null){
                 }
                 else if(($noti['ChangeType'] == 'Created' &&!$task_registered) || ($noti['ChangeType'] == "Updated" && !$task_registered)){
                     $createEvent = true;
+                }
+                else {
+                    $logger->info('Invalid hook received.');
+                    $logger->debug($json);
                 }
 
                 // If an event needs to be created, do so
@@ -136,10 +141,10 @@ if($data != null){
                 }
             } catch (ToDoCalSyncException $e) {
                 $logger->error($e);
-                $logger->debug($data);
+                $logger->debug($json);
             } catch(Google_Service_Exception $e){
                 $logger->error($e);
-                $logger->debug($data);
+                $logger->debug($json);
             }
 
         }
