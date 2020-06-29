@@ -47,7 +47,7 @@ if (isset($authCode)) {
 
         // Get user info from Outlook API
         $client = new GuzzleHttp\Client();
-        $res = $client->request('GET', 'https://outlook.office.coom/api/v2.0/me', [
+        $res = $client->request('GET', 'https://outlook.office.com/api/v2.0/me', [
             'headers' => [
                 'Authorization' => 'Bearer ' . $accessToken->getToken()
             ]
