@@ -6,9 +6,11 @@ session_start();
 $dotenv = Dotenv\Dotenv::createImmutable(__DIR__);
 $dotenv->load();
 
+$logger = new Katzgrau\KLogger\Logger(__DIR__.'/logs');
+
 if(isset($_SESSION['ms_id'])){
-    $conn = fetchPDOConnection();
-    if($conn != null){
+    try{
+        $conn = fetchPDOConnection();
         $stmtCheckStatus = $conn->prepare('SELECT ms_sub_id FROM ms_subs WHERE ms_id =? LIMIT 1');
         $stmtCheckStatus->bindParam(1, $_SESSION['ms_id'], PDO::PARAM_STR);
 
@@ -44,15 +46,18 @@ if(isset($_SESSION['ms_id'])){
                 echo '<br><br>Subscribed successfully';
             } catch (\GuzzleHttp\Exception\GuzzleException $e) {
                 echo 'Unable to subscribe to notifications. Try logging in again or check the log for details';
-                //log it
+                $logger->error('Unable to subscript to notifications.');
+                $logger->error($e);
             }
         }
 
 
     }
-    else {
-        echo 'Cannot connect to the database';
+    catch (PDOException $e) {
+        echo 'Error establishing database connection.';
+        $logger->error('Error establishing database connection.');
+        $logger->error($e);
     }
 } else{
-    echo 'Please login at signin-ms.php first.';
+    echo 'Please login at <a href="signin-ms.php">signin-ms.php</a> first.';
 }

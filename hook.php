@@ -1,15 +1,9 @@
 <?php
-require_once 'logging.php';
 require_once 'utils.php';
 $json = file_get_contents('php://input');
 $data = json_decode($json, true);
-ob_start();
-var_dump($data);
-$result = ob_get_clean();
 
-$log = new Logging();
-$log->lfile('log.txt');
-$log->lwrite($result);
+$logger = new Katzgrau\KLogger\Logger(__DIR__.'/logs');
 
 if(isset($_GET['validationtoken'])){
     echo $_GET['validationtoken'];
@@ -17,8 +11,8 @@ if(isset($_GET['validationtoken'])){
 }
 
 if($data != null){
-    $conn = fetchPDOConnection();
-    if($conn != null){
+    try{
+        $conn = fetchPDOConnection();
         foreach($data['value'] as $noti){
             $resource = $noti['Resource'];
 
@@ -30,111 +24,129 @@ if($data != null){
 
             $row = $stmt->fetch(PDO::FETCH_ASSOC);
 
-            $msToken = fetchMSUserToken($conn, $row['ms_id']);
-            $gToken = fetchGoogleUserToken($conn, $row['ms_id']);
 
-            // Set up the Google Client
-            $clientGoogle = new Google_Client();
-            $clientGoogle->setAuthConfig('./google_client_credentials.json');
-            $clientGoogle->setAccessToken($gToken);
+            try {
+                $msToken = fetchMSUserToken($conn, $row['ms_id']);
+                $gToken = fetchGoogleUserToken($conn, $row['ms_id']);
 
-            $service = new Google_Service_Calendar($clientGoogle);
+                // Set up the Google Client
+                $clientGoogle = new Google_Client();
+                $clientGoogle->setAuthConfig('./google_client_credentials.json');
+                $clientGoogle->setAccessToken($gToken);
 
-            // Get the ID from the notification
-            $toDoId = $noti['ResourceData']['Id'];
+                $service = new Google_Service_Calendar($clientGoogle);
 
-            // See if we have it registered in the DB
-            $stmtGetTask = $conn->prepare('SELECT * FROM tasks WHERE ms_task_id=? LIMIT 1');
-            $stmtGetTask->bindParam(1, $toDoId, PDO::PARAM_STR);
+                // Get the ID from the notification
+                $toDoId = $noti['ResourceData']['Id'];
 
-            $stmtGetTask->execute();
+                // See if we have it registered in the DB
+                $stmtGetTask = $conn->prepare('SELECT * FROM tasks WHERE ms_task_id=? LIMIT 1');
+                $stmtGetTask->bindParam(1, $toDoId, PDO::PARAM_STR);
 
-            $task_registered = false;
-            if($stmtGetTask->rowCount() > 0){
-                // Tasks exists in DB
-                $task_registered = true;
-            }
+                $stmtGetTask->execute();
 
-            $rowGetTask = $stmtGetTask->fetch(PDO::FETCH_ASSOC);
-
-            // If the task was not deleted, get information about it
-            $toDo = null;
-            if($noti['ChangeType'] != 'Deleted'){
-                $clientHTTP = new GuzzleHttp\Client();
-                $res = null;
-                try{
-                    $res = $clientHTTP->request('GET', $resource, [
-                        'headers' => [
-                            'Authorization' => 'Bearer ' . $msToken
-                        ]
-                    ]);
-                }
-                catch(\GuzzleHttp\Exception\ClientException $e){
-                    // log and die here
-                    echo 'error with request bad';
-                }
-                catch(\GuzzleHttp\Exception\ServerException $e){
-                    // log and die here
-                    echo 'error getting task info from microsfot, deal with it';
+                $task_registered = false;
+                if($stmtGetTask->rowCount() > 0){
+                    // Tasks exists in DB
+                    $task_registered = true;
                 }
 
-                $toDo = json_decode($res->getBody(), true);
-            }
+                $rowGetTask = $stmtGetTask->fetch(PDO::FETCH_ASSOC);
 
-            // Process the notification
-            $stmtUpdateTaskDB = null;
-            $createEvent = false;
+                // If the task was not deleted, get information about it
+                $toDo = null;
+                if($noti['ChangeType'] != 'Deleted'){
+                    $clientHTTP = new GuzzleHttp\Client();
+                    $res = null;
+                    try{
+                        $res = $clientHTTP->request('GET', $resource, [
+                            'headers' => [
+                                'Authorization' => 'Bearer ' . $msToken
+                            ]
+                        ]);
+                    }
+                    catch(\GuzzleHttp\Exception\ClientException $e){
+                        // Client request error
+                        $logger->error('There was an error fetching information about the task.');
+                        $logger->error($e);
+                        $logger->debug($data);
+                        die();
+                    }
+                    catch(\GuzzleHttp\Exception\ServerException $e){
+                        // Server side error
+                        $logger->error('There was an external server error fetching information about the task.');
+                        $logger->error($e);
+                        $logger->debug($data);
+                        die();
+                    }
 
-            if($noti['ChangeType'] == "Updated" && $task_registered){
-                // Look for task entry in DB, if not found create it in Google Calendar
-                $event = prepareEventFromTodo($toDo);
-                try{
-                    $service->events->update($row['google_calendar_id'], $rowGetTask['google_event_id'], $event);
+                    $toDo = json_decode($res->getBody(), true);
                 }
-                catch(Google_Service_Exception $e){
+
+                // Process the notification
+                $stmtUpdateTaskDB = null;
+                $createEvent = false;
+
+                if($noti['ChangeType'] == "Updated" && $task_registered){
+                    // Look for task entry in DB, if not found create it in Google Calendar
+                    $event = prepareEventFromTodo($toDo);
+                    try{
+                        $service->events->update($row['google_calendar_id'], $rowGetTask['google_event_id'], $event);
+                    }
+                    catch(Google_Service_Exception $e){
+                        $logger->error('There was an error updating the corresponding event from Google Calendar');
+                        $logger->error($e);
+                        $logger->debug($data);
+                        $createEvent = true;
+                    }
+                }
+                else if($noti['ChangeType'] == 'Deleted' && $task_registered){
+                    // Look for task entry in DB, if found, delete from Google Calendar
+                    try{
+                        $service->events->delete($row['google_calendar_id'], $rowGetTask['google_event_id']);
+                    }
+                    catch(Google_Service_Exception $e){
+                        $logger->error('There was an error removing the corresponding event from Google Calendar');
+                        $logger->error($e);
+                        $logger->debug($data);
+                    }
+
+                    // Drop it from the DB
+                    $stmtRemoveTask = $conn->prepare('DELETE FROM tasks WHERE ms_task_id=? LIMIT 1');
+                    $stmtRemoveTask->bindParam(1, $toDoId, PDO::PARAM_STR);
+                    $stmtRemoveTask->execute();
+
+                }
+                else if(($noti['ChangeType'] == 'Created' &&!$task_registered) || ($noti['ChangeType'] == "Updated" && !$task_registered)){
                     $createEvent = true;
                 }
-            }
-            else if($noti['ChangeType'] == 'Deleted' && $task_registered){
-                // Look for task entry in DB, if found, delete from Google Calendar
-                try{
-                    $service->events->delete($row['google_calendar_id'], $rowGetTask['google_event_id']);
+
+                // If an event needs to be created, do so
+                if($createEvent){
+                    // Create task if it doesn't already exist OR is it is supposed to be updated but we don't have an entry for it
+                    $event = prepareEventFromTodo($toDo);
+                    $createdEvent = $service->events->insert($row['google_calendar_id'], $event);
+
+                    $stmtUpdateTaskDB = $conn->prepare('INSERT INTO tasks (ms_task_id, google_event_id) VALUES (:m_t_id, :g_e_id)');
+
+                    $stmtUpdateTaskDB->bindValue(":m_t_id", $toDoId);
+                    $stmtUpdateTaskDB->bindValue(":g_e_id", $createdEvent->getId());
+
+                    $stmtUpdateTaskDB->execute();
                 }
-                catch(Google_Service_Exception $e){
-                    $log->lwrite("deleted on Google end");
-                    echo 'already deleted on Google end';
-                }
-
-                // Drop it from the DB
-                $stmtRemoveTask = $conn->prepare('DELETE FROM tasks WHERE ms_task_id=? LIMIT 1');
-                $stmtRemoveTask->bindParam(1, $toDoId, PDO::PARAM_STR);
-                $stmtRemoveTask->execute();
-
-            }
-            else if(($noti['ChangeType'] == 'Created' &&!$task_registered) || ($noti['ChangeType'] == "Updated" && !$task_registered)){
-                $createEvent = true;
-            }
-            else{
-                echo 'somthign is weird: ';
-                echo $task_registered ? "true": "false";
+            } catch (ToDoCalSyncException $e) {
+                $logger->error($e);
+                $logger->debug($data);
+            } catch(Google_Service_Exception $e){
+                $logger->error($e);
+                $logger->debug($data);
             }
 
-            if($createEvent){
-                // Create task if it doesn't already exist OR is it is supposed to be updated but we don't have an entry for it
-                $event = prepareEventFromTodo($toDo);
-                $createdEvent = $service->events->insert($row['google_calendar_id'], $event);
-                echo $createdEvent->getId();
-
-                $stmtUpdateTaskDB = $conn->prepare('INSERT INTO tasks (ms_task_id, google_event_id) VALUES (:m_t_id, :g_e_id)');
-
-                $stmtUpdateTaskDB->bindValue(":m_t_id", $toDoId);
-                $stmtUpdateTaskDB->bindValue(":g_e_id", $createdEvent->getId());
-
-                $stmtUpdateTaskDB->execute();
-            }
         }
+    }
+    catch(PDOException $e) {
+        $logger->error('Error establishing database connection on hook receipt.');
+        $logger->error($e);
     }
 
 }
-
-$log->lclose();

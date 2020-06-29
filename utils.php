@@ -3,22 +3,19 @@ require_once 'vendor/autoload.php';
 $dotenv = Dotenv\Dotenv::createImmutable(__DIR__);
 $dotenv->load();
 
+
+
 function fetchPDOConnection(){
     $DB_HOST = $_ENV['DB_HOST'];
     $DB_NAME = $_ENV['DB_NAME'];
     $DB_USER = $_ENV['DB_USER'];
     $DB_PASSWORD = $_ENV['DB_PASSWORD'];
-    try{
-        $conn = new PDO("mysql:host=$DB_HOST;dbname=$DB_NAME", $DB_USER, $DB_PASSWORD);
+    $conn = new PDO("mysql:host=$DB_HOST;dbname=$DB_NAME", $DB_USER, $DB_PASSWORD);
 
-        $conn->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
+    $conn->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
 
-        return $conn;
+    return $conn;
 
-    } catch(PDOException $e){
-        echo 'Connection failed: ' . $e->getMessage();
-        return null;
-    }
 }
 
 function refreshMSToken($conn, $ms_id, $ms_refreshtoken){
@@ -74,10 +71,6 @@ function refreshGoogleToken($conn, $ms_id, $google_refreshtoken){
     return $gToken;
 }
 
-function renewMSSub($ubID) {
-
-}
-
 function fetchMSUserToken($conn, $ms_id) {
     $stmt = $conn->prepare('SELECT ms_accesstoken,ms_accesstoken_expiry,ms_refreshtoken FROM tokens WHERE ms_id=? LIMIT 1');
     $stmt->bindParam(1, $ms_id, PDO::PARAM_STR);
@@ -96,7 +89,7 @@ function fetchMSUserToken($conn, $ms_id) {
         }
     }
     else{
-        return null;
+        throw new ToDoCalSyncException('No Microsoft access token found in the database with MS ID: ' . $ms_id);
     }
 
 }
@@ -111,7 +104,6 @@ function fetchGoogleUserToken($conn, $ms_id){
     if($row['google_accesstoken'] != null){
         if(time() > $row['google_accesstoken_expiry'] - 60) { // give a bit of leeway so that the token will not expire as we are performing an operation
             // need to refresh the token
-            echo 'refreshing token';
             return refreshGoogleToken($conn, $ms_id, $row['google_refreshtoken']);
         }
         else {
@@ -119,7 +111,7 @@ function fetchGoogleUserToken($conn, $ms_id){
         }
     }
     else{
-        return null;
+        throw new ToDoCalSyncException('No Google access token found in the database with MS ID: ' . $ms_id);
     }
 }
 

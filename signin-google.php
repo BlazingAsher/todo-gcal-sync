@@ -5,12 +5,14 @@ require_once 'utils.php';
 session_start();
 
 if(!isset($_SESSION["ms_id"])){
-    echo 'please authorize with ms first';
+    echo 'Please authorize with MS first at <a href="signin-ms.php">signin-ms.php</a>';
     die();
 }
 
 $dotenv = Dotenv\Dotenv::createImmutable(__DIR__);
 $dotenv->load();
+
+$logger = new Katzgrau\KLogger\Logger(__DIR__.'/logs');
 
 $client = new Google_Client();
 $client->setApplicationName("To Do and Google Calendar Syncer");
@@ -25,9 +27,9 @@ $client->setRedirectUri($_ENV['GOOGLE_OAUTH_REDIRECT_URI']);
 if (isset($_GET['code'])) {
     $token = $client->fetchAccessTokenWithAuthCode($_GET['code']);
     var_dump($token);
+    try{
+        $conn = fetchPDOConnection();
 
-    $conn = fetchPDOConnection();
-    if($conn != null){
         $stmt = $conn->prepare('UPDATE tokens SET google_accesstoken=:g_at, google_accesstoken_expiry=:g_at_exp, google_refreshtoken=:g_rt, google_refreshtoken_issued=:g_rt_iss WHERE ms_id=:ms_id');
         $stmt->bindValue(":g_at", $token['access_token'], PDO::PARAM_STR);
         $stmt->bindValue(":g_at_exp", $token['created'] + $token['expires_in'], PDO::PARAM_INT);
@@ -37,11 +39,16 @@ if (isset($_GET['code'])) {
 
         $stmt->execute();
 
-        echo 'associated bearer with MSID ' . $_SESSION['ms_id'];
+        echo 'Associated bearer with MSID ' . $_SESSION['ms_id'];
+    }
+    catch(PDOException $e){
+        echo 'Error establishing database connection.';
+        $logger->error('Error establishing database connection.');
+        $logger->error($e);
     }
 
 }
 else{
     $authUrl = $client->createAuthUrl();
-    echo $authUrl;
+    echo '<a href="' . $authUrl . '">Click here to sign in to Google</a>';
 }

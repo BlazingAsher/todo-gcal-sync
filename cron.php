@@ -5,26 +5,35 @@ require 'utils.php';
 $dotenv = Dotenv\Dotenv::createImmutable(__DIR__);
 $dotenv->load();
 
-$conn = fetchPDOConnection();
+$logger = new Katzgrau\KLogger\Logger(__DIR__.'/logs');
 
-$tokenCache = array();
+try{
+    $conn = fetchPDOConnection();
 
-// Refresh all refresh tokens
-if($conn != null){
+    $tokenCache = array();
+
+    // Refresh all refresh tokens
     $stmt = $conn->prepare('SELECT * FROM tokens');
 
     if ($stmt->execute()) {
         while ($row = $stmt->fetch(PDO::FETCH_ASSOC)) {
-            $token = refreshMSToken($conn, $row['ms_id'], $row['ms_refreshtoken']);
-            echo $token;
+            try{
+                $token = refreshMSToken($conn, $row['ms_id'], $row['ms_refreshtoken']);
 
-            // store this for sub renewal
-            $tokenCache[$row['id']] = $token;
+                // store this for sub renewal
+                $tokenCache[$row['ms_id']] = $token;
 
-            $gToken = refreshGoogleToken($conn, $row['ms_id'], $row['google_refreshtoken']);
-            var_dump($gToken);
+                $gToken = refreshGoogleToken($conn, $row['ms_id'], $row['google_refreshtoken']);
+            }
+            catch(\League\OAuth2\Client\Provider\Exception\IdentityProviderException $e){
+                $logger->error('Error refreshing MS token for MS ID ' . $row['ms_id']);
+                $logger->error($e);
+            }
+            catch(Google_Service_Exception $e){
+                $logger->error('Error refreshing Google token for MS ID ' . $row['ms_id']);
+                $logger->error($e);
+            }
 
-            echo '<br><br></br>updated';
         }
     }
 
@@ -37,7 +46,7 @@ if($conn != null){
             try {
                 $res = $client->request('PATCH', 'https://outlook.office.com/api/v2.0/me/subscriptions/' . $row['ms_sub_id'], [
                     'headers' => [
-                        'Authorization' => 'Bearer ' . $tokenCache[$row['user_id']]
+                        'Authorization' => 'Bearer ' . $tokenCache[$row['ms_id']]
                     ],
                     'json' => [
                         "@odata.type"=>"#Microsoft.OutlookServices.PushSubscription"
@@ -45,12 +54,15 @@ if($conn != null){
                 ]);
                 echo $res->getBody();
             } catch (\GuzzleHttp\Exception\GuzzleException $e) {
-                echo 'error renewing sub';
+                $logger->error('Error renewing MS sub ID ' , $row['ms_sub_id']);
+                $logger->error($e);
             }
-
-            echo $res->getBody();
         }
     }
 }
+catch (PDOException $e){
+    $logger->error('Error establishing database connection during cron run.');
+    $logger->error($e);
+}
 
-echo 'cron complete';
+echo 'OK';

@@ -5,9 +5,10 @@ require_once 'utils.php';
 $dotenv = Dotenv\Dotenv::createImmutable(__DIR__);
 $dotenv->load();
 
-$conn = fetchPDOConnection();
+$logger = new Katzgrau\KLogger\Logger(__DIR__.'/logs');
 
-if($conn != null){
+try{
+    $conn = fetchPDOConnection();
     $token = fetchMSUserToken($conn, $_GET['ms_id']);
 
     $client = new GuzzleHttp\Client();
@@ -22,4 +23,9 @@ if($conn != null){
 
     var_dump($user);
 
+}
+catch(PDOException $e){
+    echo 'Error establishing database connection.';
+    $logger->error('Error establishing database connection.');
+    $logger->error($e);
 }

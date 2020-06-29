@@ -20,4 +20,4 @@ $authUrl = $oauthClient->getAuthorizationUrl();
 
 $_SESSION["oauthState"] = $oauthClient->getState();
 
-echo $authUrl;
+echo '<a href="' . $authUrl . '">Click here to sign in to Microsoft</a>';

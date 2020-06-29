@@ -1,8 +1,8 @@
 <?php
 require_once 'utils.php';
-$conn = fetchPDOConnection();
+try{
+    $conn = fetchPDOConnection();
 
-if($conn != null){
     $stmt = $conn->prepare('CREATE TABLE IF NOT EXISTS `ms_subs` (
   `id` int(11) NOT NULL,
   `ms_sub_id` mediumtext NOT NULL,
@@ -33,8 +33,10 @@ if($conn != null){
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;');
     $stmt->execute();
 
-    echo 'done';
+    echo 'Done.';
 }
-else {
-    echo 'error establishing database connection';
+catch(PDOException $e) {
+    echo 'Error establishing database connection.';
+    $logger->error('Error establishing database connection.');
+    $logger->error($e);
 }

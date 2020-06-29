@@ -11,15 +11,17 @@ $expectedState = $_SESSION['oauthState'];
 unset($_SESSION["oauthState"]);
 $providedState = $_GET['state'];
 
+$logger = new Katzgrau\KLogger\Logger(__DIR__.'/logs');
+
 if (!isset($expectedState)) {
     // If there is no expected state in the session,
     // do nothing and redirect to the home page.
-    echo 'no expected state';
+    echo 'No expected state! Go to <a href="signin-ms.php">signin-ms.php</a> to start the sign in process.';
     die();
 }
 
 if (!isset($providedState) || $expectedState != $providedState) {
-    echo 'invalid auth state';
+    echo 'Invalid auth state! Go to <a href="signin-ms.php">signin-ms.php</a> to start the sign in process.';
     die();
 }
 
@@ -43,28 +45,21 @@ if (isset($authCode)) {
             'code' => $authCode
         ]);
 
-        // TEMPORARY FOR TESTING!
-        echo 'access token received<br>';
-        echo $accessToken->getToken();
-        echo '<br><br>';
-        echo $accessToken->getRefreshToken();
-        echo '<br><br>';
-
+        // Get user info from Outlook API
         $client = new GuzzleHttp\Client();
-        $res = $client->request('GET', 'https://outlook.office.com/api/v2.0/me', [
+        $res = $client->request('GET', 'https://outlook.office.coom/api/v2.0/me', [
             'headers' => [
                 'Authorization' => 'Bearer ' . $accessToken->getToken()
             ]
         ]);
 
-        echo $res->getBody();
         $user = json_decode($res->getBody(), true);
 
         $user_ms_id = $user['Id'];
 
-        // store access tokens in DB
-        $conn = fetchPDOConnection();
-        if($conn != null){
+        // Get a DB connection so that we can add/update user
+        try{
+            $conn = fetchPDOConnection();
             // Check if user already exists
             $stmt = $conn->prepare('SELECT EXISTS(SELECT * FROM tokens WHERE ms_id=? LIMIT 1) as ex');
             $stmt->bindParam(1, $user_ms_id, PDO::PARAM_STR);
@@ -77,12 +72,12 @@ if (isset($authCode)) {
                 // Found a user, will update token
                 $uStmt = $conn->prepare('UPDATE tokens SET ms_accesstoken=:ms_at, ms_accesstoken_expiry=:ms_at_exp, ms_refreshtoken = :ms_rt, ms_refreshtoken_issued=:ms_rt_iss WHERE ms_id=:ms_id');
 
-                echo 'user found';
+                echo 'Updated user tokens. ';
             } else {
-                // New user
+                // New user, add an entry
                 $uStmt = $conn->prepare('INSERT INTO tokens (ms_id, ms_accesstoken, ms_accesstoken_expiry, ms_refreshtoken, ms_refreshtoken_issued) VALUES (:ms_id, :ms_at, :ms_at_exp, :ms_rt, :ms_rt_iss)');
 
-                echo 'record created';
+                echo 'Created user. ';
             }
 
             $uStmt->bindValue(':ms_id', $user_ms_id, PDO::PARAM_STR);
@@ -92,24 +87,32 @@ if (isset($authCode)) {
             $uStmt->bindValue(':ms_rt_iss', time(), PDO::PARAM_INT);
 
             $uStmt->execute();
-            echo 'executed';
+            echo 'Successfully signed in.';
 
+            // Add auth details to session
             $_SESSION["ms_id"] = $user_ms_id;
             $_SESSION['ms_token'] = $accessToken->getToken();
 
-            //TODO: Subscribe to event notifications
-
         }
-        else {
-            echo 'no connection';
+        catch(PDOException $e){
+            echo 'Error establishing database connection.';
+            $logger->error('Error establishing database connection.');
+            $logger->error($e);
         }
 
         die();
     }
     catch (League\OAuth2\Client\Provider\Exception\IdentityProviderException $e) {
-        echo 'error retrieving access token';
+        echo 'Error retrieving access token!';
+        $logger->error('Error retrieving access token!');
+        $logger->error($e);
+        die();
+    } catch (\GuzzleHttp\Exception\GuzzleException $e) {
+        echo 'Error retrieving user information!';
+        $logger->error('Error retrieving user information!');
+        $logger->error($e);
         die();
     }
 }
 
-echo 'no auth code';
+echo 'No auth code! Go to <a href="signin-ms.php">signin-ms.php</a> to start the sign in process.';
