@@ -52,9 +52,9 @@ try{
                         "@odata.type"=>"#Microsoft.OutlookServices.PushSubscription"
                     ]
                 ]);
-                echo $res->getBody();
+
             } catch (\GuzzleHttp\Exception\GuzzleException $e) {
-                $logger->error('Error renewing MS sub ID ' , $row['ms_sub_id']);
+                $logger->error('Error renewing MS sub ID ' . $row['ms_sub_id']);
                 $logger->error($e);
             }
         }
