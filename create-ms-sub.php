@@ -22,6 +22,7 @@ if(isset($_SESSION['ms_id'])){
         }
         else{
             try {
+                $client = new GuzzleHttp\Client();
                 $res = $client->request('POST', 'https://outlook.office.com/api/v2.0/me/subscriptions', [
                     'headers' => [
                         'Authorization' => 'Bearer ' . $_SESSION['ms_token']
