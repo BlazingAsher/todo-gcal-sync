@@ -28,10 +28,22 @@ try{
             catch(\League\OAuth2\Client\Provider\Exception\IdentityProviderException $e){
                 $logger->error('Error refreshing MS token for MS ID ' . $row['ms_id']);
                 $logger->error($e);
+
+                try {
+                    sendPushoverMessage('Error refreshing MS token for MS ID ' . $row['ms_id']);
+                } catch (ToDoCalSyncException $e) {
+                    $logger->error('Error sending message to Pushover');
+                }
             }
             catch(Google_Service_Exception $e){
                 $logger->error('Error refreshing Google token for MS ID ' . $row['ms_id']);
                 $logger->error($e);
+
+                try {
+                    sendPushoverMessage('Error refreshing Google token for MS ID ' . $row['ms_id']);
+                } catch (ToDoCalSyncException $e) {
+                    $logger->error('Error sending message to Pushover');
+                }
             }
 
         }
@@ -56,6 +68,12 @@ try{
             } catch (\GuzzleHttp\Exception\GuzzleException $e) {
                 $logger->error('Error renewing MS sub ID ' . $row['ms_sub_id']);
                 $logger->error($e);
+
+                try {
+                    sendPushoverMessage('Error renewing MS sub ID ' . $row['ms_sub_id']);
+                } catch (ToDoCalSyncException $e) {
+                    $logger->error('Error sending message to Pushover');
+                }
             }
         }
     }
@@ -63,6 +81,18 @@ try{
 catch (PDOException $e){
     $logger->error('Error establishing database connection during cron run.');
     $logger->error($e);
+
+    try {
+        sendPushoverMessage('Error establishing database connection during cron run.');
+    } catch (ToDoCalSyncException $e) {
+        $logger->error('Error sending message to Pushover');
+    }
 }
 
 echo 'OK';
+
+try {
+    sendPushoverMessage('ToDoCalSync cron run successfully.');
+} catch (ToDoCalSyncException $e) {
+    $logger->error('Error sending message to Pushover');
+}

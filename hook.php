@@ -15,6 +15,10 @@ if($data != null){
     try{
         $conn = fetchPDOConnection();
         foreach($data['value'] as $noti){
+            if($noti['ChangeType'] == 'Missed'){
+                $logger->info('No action needed. Skipping.');
+                continue;
+            }
             $resource = $noti['Resource'];
 
             // fetch tokens from the DB
@@ -24,6 +28,8 @@ if($data != null){
             $stmt->execute();
 
             $row = $stmt->fetch(PDO::FETCH_ASSOC);
+            
+            $logger->debug($json);
 
 
             try {
@@ -71,6 +77,13 @@ if($data != null){
                         $logger->error('There was an error fetching information about the task.');
                         $logger->error($e);
                         $logger->debug($json);
+
+                        try {
+                            sendPushoverMessage('There was an error fetching information about the task.');
+                        } catch (ToDoCalSyncException $e) {
+                            $logger->error('Error sending message to Pushover');
+                        }
+
                         die();
                     }
                     catch(\GuzzleHttp\Exception\ServerException $e){
@@ -78,6 +91,13 @@ if($data != null){
                         $logger->error('There was an external server error fetching information about the task.');
                         $logger->error($e);
                         $logger->debug($json);
+
+                        try {
+                            sendPushoverMessage('There was an external server error fetching information about the task.');
+                        } catch (ToDoCalSyncException $e) {
+                            $logger->error('Error sending message to Pushover');
+                        }
+
                         die();
                     }
 
@@ -98,6 +118,13 @@ if($data != null){
                         $logger->error('There was an error updating the corresponding event from Google Calendar');
                         $logger->error($e);
                         $logger->debug($json);
+
+                        try {
+                            sendPushoverMessage('There was an error updating the corresponding event from Google Calendar');
+                        } catch (ToDoCalSyncException $e) {
+                            $logger->error('Error sending message to Pushover');
+                        }
+
                         $createEvent = true;
                     }
                 }
@@ -110,6 +137,12 @@ if($data != null){
                         $logger->error('There was an error removing the corresponding event from Google Calendar');
                         $logger->error($e);
                         $logger->debug($json);
+
+                        try {
+                            sendPushoverMessage('There was an error removing the corresponding event from Google Calendar');
+                        } catch (ToDoCalSyncException $e) {
+                            $logger->error('Error sending message to Pushover');
+                        }
                     }
 
                     // Drop it from the DB
@@ -152,6 +185,12 @@ if($data != null){
     catch(PDOException $e) {
         $logger->error('Error establishing database connection on hook receipt.');
         $logger->error($e);
+
+        try {
+            sendPushoverMessage('Error establishing database connection on hook receipt.');
+        } catch (ToDoCalSyncException $e) {
+            $logger->error('Error sending message to Pushover');
+        }
     }
 
 }

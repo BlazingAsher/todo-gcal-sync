@@ -4,8 +4,6 @@ require_once 'ToDoCalSyncException.php';
 $dotenv = Dotenv\Dotenv::createImmutable(__DIR__);
 $dotenv->load();
 
-
-
 function fetchPDOConnection(){
     $DB_HOST = $_ENV['DB_HOST'];
     $DB_NAME = $_ENV['DB_NAME'];
@@ -152,4 +150,24 @@ function prepareEventFromTodo($toDo){
     
     return $event;
         
+}
+
+function sendPushoverMessage($message) {
+    curl_setopt_array($ch = curl_init(), array(
+        CURLOPT_URL => "https://api.pushover.net/1/messages.json",
+        CURLOPT_POSTFIELDS => array(
+            "token" => $_ENV['PUSHOVER_API_KEY'],
+            "user" => $_ENV['PUSHOVER_USER_KEY'],
+            "message" => $message,
+        ),
+        CURLOPT_SAFE_UPLOAD => true,
+        CURLOPT_RETURNTRANSFER => true,
+    ));
+
+    curl_exec($ch);
+    if(curl_errno($ch))
+    {
+        throw new ToDoCalSyncException('Curl error: ' . curl_error($ch));
+    }
+    curl_close($ch);
 }
